@@ -2,7 +2,7 @@
 
 # Monaco Nerd Font
 
-This font is modified from `Monaco.ttf` extracted from **macOS Ventura**, with **bold**, **italic**, and **bold italic** added.
+This font is modified from `Monaco.ttf` extracted from **macOS Ventura**, with **bold**, *italic*, and ***bold italic*** added.
 
 ## Usage
 
