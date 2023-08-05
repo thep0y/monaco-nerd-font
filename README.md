@@ -1,4 +1,4 @@
-![sample](images/sample.png)
+![sample](images/logo.png)
 
 # Monaco Nerd Font
 
