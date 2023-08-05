@@ -6,7 +6,7 @@ This font is modified from `Monaco.ttf` extracted from **macOS Ventura**, with *
 
 ## Usage
 
-You can directly download the pre-built font zip from the Latest Release, or clone this repo locally and build automatically with `docker` or `podman`.
+You can directly download the pre-built font zip from the [Latest Release](https://github.com/thep0y/monaco-nerd-font/releases/latest), or clone this repo locally and build automatically with `docker` or `podman`.
 
 ## Build
 
