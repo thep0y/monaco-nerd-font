@@ -2,7 +2,7 @@
 
 # Monaco Nerd Font
 
-This font is modified from `Monaco.ttf` extracted from **macOS Ventura**, with **bold**, *italic*, and ***bold italic*** added.
+This font is modified from `Monaco.ttf` extracted from **macOS Ventura**, with **bold**, _italic_, and **_bold italic_** added.
 
 ## Usage
 
@@ -23,3 +23,7 @@ Please make sure you have `docker` or `podman` installed before executing the sc
 neovim:
 
 ![sample](images/nvim.png)
+
+vscode:
+
+![sample](images/vscdoe.png)
