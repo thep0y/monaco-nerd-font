@@ -17,3 +17,9 @@ sh build.sh
 ```
 
 Please make sure you have `docker` or `podman` installed before executing the script.
+
+## Screenshots
+
+neovim:
+
+![sample](images/nvim.png)
