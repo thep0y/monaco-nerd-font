@@ -1,19 +1,34 @@
 #!/bin/sh
 
-in_path=./original
-out_path=./out
+set -e
 
-container_exec() {
-  if command -v podman &>/dev/null; then
-    podman "$@"
-  elif command -v docker &>/dev/null; then  
-    docker "$@"
-  else
-    echo "Error: podman and docker are not installed" >&2
-    return 1
-  fi
+INPUT_DIR=./original
+OUTPUT_DIR=./out
+
+container_run() {
+	if command -v podman >/dev/null; then
+		echo "Using podman"
+		podman "$@"
+	elif command -v docker >/dev/null; then
+		echo "Using docker"
+		docker "$@"
+	else
+		echo "Error: podman and docker not installed" >&2
+		return 1
+	fi
 }
 
-mkdir -p "$out_path"
-container_exec run --rm -v "$in_path":/in -v "$out_path":/out nerdfonts/patcher -c
-container_exec run --rm -v "$in_path":/in -v "$out_path":/out nerdfonts/patcher -c -s
+RUN_OPTS="run --rm -v $INPUT_DIR:/in -v $OUTPUT_DIR:/out nerdfonts/patcher"
+
+rm -rf "$OUTPUT_DIR"
+mkdir "$OUTPUT_DIR"
+
+CMD1="$RUN_OPTS -c"
+CMD2="$RUN_OPTS -c -s"
+
+echo "Running container commands..."
+
+container_run $CMD1
+container_run $CMD2
+
+echo "Done."
