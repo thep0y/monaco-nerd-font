@@ -18,6 +18,8 @@ sh build.sh
 
 Please make sure you have `docker` or `podman` installed before executing the script.
 
+> Some terminals may not support ligatures, ligature fonts are not recommended for vim/nvim users.
+
 ## Screenshots
 
 neovim:
@@ -27,3 +29,13 @@ neovim:
 vscode:
 
 ![sample](images/vscdoe.png)
+
+ligatures:
+
+![ligatures](images/ligatures.png)
+
+## Related Projects
+
+- [nerd-fonts](https://github.com/ryanoasis/nerd-fonts)
+
+- [Ligaturizer](https://github.com/ToxicFrog/Ligaturizer)

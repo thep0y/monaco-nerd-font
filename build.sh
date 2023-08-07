@@ -2,8 +2,10 @@
 
 set -e
 
-INPUT_DIR=./original
 OUTPUT_DIR=./out
+
+rm -rf "$OUTPUT_DIR"
+mkdir "$OUTPUT_DIR"
 
 container_run() {
 	if command -v podman >/dev/null; then
@@ -18,17 +20,20 @@ container_run() {
 	fi
 }
 
-RUN_OPTS="run --rm -v $INPUT_DIR:/in -v $OUTPUT_DIR:/out nerdfonts/patcher"
+INPUT_DIRS="./ligaturized"
+for input_dir in $INPUT_DIRS; do
+	if [ "$input_dir" = './ligaturized' ]; then
+		RUN_OPTS="run --rm -v $input_dir:/in -v $OUTPUT_DIR:/out nerdfonts/patcher --makegroups 1"
+	else
+		RUN_OPTS="run --rm -v $input_dir:/in -v $OUTPUT_DIR:/out nerdfonts/patcher"
+	fi
 
-rm -rf "$OUTPUT_DIR"
-mkdir "$OUTPUT_DIR"
+	CMD1="$RUN_OPTS -c"
+	CMD2="$RUN_OPTS -c -s"
 
-CMD1="$RUN_OPTS -c"
-CMD2="$RUN_OPTS -c -s"
+	echo "Running container commands..."
 
-echo "Running container commands..."
-
-container_run $CMD1
-container_run $CMD2
-
+	container_run $CMD1
+	container_run $CMD2
+done
 echo "Done."
