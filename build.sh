@@ -20,7 +20,7 @@ container_run() {
 	fi
 }
 
-INPUT_DIRS="./ligaturized"
+INPUT_DIRS="./original ./ligaturized"
 for input_dir in $INPUT_DIRS; do
 	if [ "$input_dir" = './ligaturized' ]; then
 		RUN_OPTS="run --rm -v $input_dir:/in -v $OUTPUT_DIR:/out nerdfonts/patcher --makegroups 1"
