@@ -10,6 +10,11 @@ You can directly download the pre-built font zip from the [Latest Release](https
 
 ## Build
 
+### Requirements
+
+1. MacOS operating system and its **Monaco** font.
+2. 
+
 You can build the font by executing the script with the latest `nerfonts/patcher` image:
 
 ```shell
