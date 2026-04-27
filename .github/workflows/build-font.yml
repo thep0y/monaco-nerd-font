@@ -173,7 +173,7 @@ jobs:
               run: |
                   cd out
                   for prefix in MonacoLigaturizedNerdFont MonacoLigaturizedNerdFontMono MonacoNerdFont MonacoNerdFontMono; do
-                      zip -r "../${prefix}.zip" "${prefix}"*.ttf
+                      zip -r "../${prefix}.zip" "${prefix}-"*.ttf
                   done
 
             # ===== 发布 =====
