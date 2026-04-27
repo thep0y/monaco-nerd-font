@@ -156,6 +156,7 @@ jobs:
             - name: Inject version
               if: steps.final.outputs.build == 'true'
               run: |
+                  chmod -R u+w out
                   python .scripts/inject_version.py \
                     out \
                     "${{ steps.bump.outputs.version }}" \
