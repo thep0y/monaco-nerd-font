@@ -12,7 +12,7 @@ on:
                 description: "Manual bump type"
                 required: true
                 type: choice
-                options: [major, minor, patch]
+                options: [patch, minor, major]
 
 jobs:
     build:
@@ -146,11 +146,11 @@ jobs:
               run: |
                   mkdir out
 
-                  docker run --rm -v $PWD/original:/in -v $PWD/out:/out nerdfonts/patcher -c
-                  docker run --rm -v $PWD/original:/in -v $PWD/out:/out nerdfonts/patcher -c -s
+                  docker run --rm --user $(id -u):$(id -g) -v $PWD/original:/in -v $PWD/out:/out nerdfonts/patcher -c
+                  docker run --rm --user $(id -u):$(id -g) -v $PWD/original:/in -v $PWD/out:/out nerdfonts/patcher -c -s
 
-                  docker run --rm -v $PWD/ligaturized:/in -v $PWD/out:/out nerdfonts/patcher --makegroups 1 -c
-                  docker run --rm -v $PWD/ligaturized:/in -v $PWD/out:/out nerdfonts/patcher --makegroups 1 -c -s
+                  docker run --rm --user $(id -u):$(id -g) -v $PWD/ligaturized:/in -v $PWD/out:/out nerdfonts/patcher --makegroups 1 -c
+                  docker run --rm --user $(id -u):$(id -g) -v $PWD/ligaturized:/in -v $PWD/out:/out nerdfonts/patcher --makegroups 1 -c -s
 
             # ===== 注入版本 =====
             - name: Inject version
