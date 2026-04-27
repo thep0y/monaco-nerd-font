@@ -10,9 +10,10 @@ on:
         inputs:
             bump:
                 description: "Manual bump type"
-                required: true
+                required: false
                 type: choice
-                options: [patch, minor, major]
+                options: [major, minor, patch]
+                default: "patch"
 
 permissions:
     contents: write
