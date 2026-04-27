@@ -1,0 +1,183 @@
+name: Build Fonts
+
+on:
+    # 自动模式（检测 nerd-fonts 更新）
+    schedule:
+        - cron: "0 3 * * *"
+
+    # 手动模式（强制发布）
+    workflow_dispatch:
+        inputs:
+            bump:
+                description: "Manual bump type"
+                required: true
+                type: choice
+                options: [major, minor, patch]
+
+jobs:
+    build:
+        runs-on: ubuntu-latest
+
+        steps:
+            - uses: actions/checkout@v4
+
+            # ===== 环境 =====
+            - uses: actions/setup-python@v5
+              with:
+                  python-version: "3.11"
+
+            - run: pip install fonttools
+
+            # ===== 判断模式 =====
+            - name: Detect mode
+              id: mode
+              run: |
+                  if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+                    echo "mode=manual" >> $GITHUB_OUTPUT
+                  else
+                    echo "mode=auto" >> $GITHUB_OUTPUT
+                  fi
+
+            # ===== 获取 nerd-fonts 最新版本 =====
+            - name: Get Nerd Fonts tag
+              id: nerd
+              run: |
+                  TAG=$(git ls-remote --tags https://github.com/ryanoasis/nerd-fonts.git \
+                    | awk -F/ '{print $3}' \
+                    | grep -E '^v?[0-9]+\.[0-9]+\.[0-9]+$' \
+                    | sort -V \
+                    | tail -n1)
+
+                  echo "tag=$TAG" >> $GITHUB_OUTPUT
+
+            # ===== 获取 release notes =====
+            - name: Fetch release notes
+              id: notes
+              if: steps.mode.outputs.mode == 'auto'
+              run: |
+                  TAG=${{ steps.nerd.outputs.tag }}
+                  BODY=$(curl -s https://api.github.com/repos/ryanoasis/nerd-fonts/releases/tags/$TAG | jq -r '.body')
+
+                  echo "body<<EOF" >> $GITHUB_OUTPUT
+                  echo "$BODY" >> $GITHUB_OUTPUT
+                  echo "EOF" >> $GITHUB_OUTPUT
+
+            # ===== 是否需要构建（仅自动模式）=====
+            - name: Check upstream update
+              id: check
+              if: steps.mode.outputs.mode == 'auto'
+              run: |
+                  LAST_TAG=$(git tag --list 'v*' | sort -V | tail -n1 || true)
+
+                  if [ -z "$LAST_TAG" ]; then
+                    echo "build=true" >> $GITHUB_OUTPUT
+                    exit 0
+                  fi
+
+                  INFO=$(git for-each-ref refs/tags/$LAST_TAG --format='%(contents)')
+                  LAST_USED=$(echo "$INFO" | grep -o 'nerd-fonts: v[0-9.]*' | awk '{print $2}')
+
+                  if [ "$LAST_USED" != "${{ steps.nerd.outputs.tag }}" ]; then
+                    echo "build=true" >> $GITHUB_OUTPUT
+                  else
+                    echo "build=false" >> $GITHUB_OUTPUT
+                  fi
+
+            # ===== 最终构建判定 =====
+            - name: Decide build
+              id: final
+              run: |
+                  if [ "${{ steps.mode.outputs.mode }}" = "manual" ]; then
+                    echo "build=true" >> $GITHUB_OUTPUT
+                  else
+                    echo "build=${{ steps.check.outputs.build }}" >> $GITHUB_OUTPUT
+                  fi
+
+            - name: Stop if no build
+              if: steps.final.outputs.build == 'false'
+              run: echo "No changes, skipping"
+
+            # ===== 获取当前版本 =====
+            - name: Get current version
+              id: current
+              if: steps.final.outputs.build == 'true'
+              run: |
+                  TAG=$(git tag --list 'v*' | sort -V | tail -n1 || true)
+                  VERSION=$(echo $TAG | sed 's/^v//')
+
+                  if [ -z "$VERSION" ]; then
+                    VERSION="0.0.0"
+                  fi
+
+                  echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+            # ===== 确定 bump =====
+            - name: Determine bump
+              id: bump_type
+              if: steps.final.outputs.build == 'true'
+              run: |
+                  if [ "${{ steps.mode.outputs.mode }}" = "manual" ]; then
+                    echo "bump=${{ github.event.inputs.bump }}" >> $GITHUB_OUTPUT
+                  else
+                    chmod +x .scripts/derive_bump.sh
+                    BUMP=$(.scripts/derive_bump.sh "${{ steps.notes.outputs.body }}")
+                    echo "bump=$BUMP" >> $GITHUB_OUTPUT
+                  fi
+
+            # ===== 计算新版本 =====
+            - name: Compute version
+              id: bump
+              if: steps.final.outputs.build == 'true'
+              run: |
+                  chmod +x .scripts/bump_version.sh
+
+                  NEW_VERSION=$(.scripts/bump_version.sh \
+                    ${{ steps.current.outputs.version }} \
+                    ${{ steps.bump_type.outputs.bump }})
+
+                  echo "version=$NEW_VERSION" >> $GITHUB_OUTPUT
+                  echo "tag=v$NEW_VERSION" >> $GITHUB_OUTPUT
+
+            # ===== 构建字体 =====
+            - name: Patch fonts
+              if: steps.final.outputs.build == 'true'
+              run: |
+                  mkdir out
+
+                  docker run --rm -v $PWD/original:/in -v $PWD/out:/out nerdfonts/patcher -c
+                  docker run --rm -v $PWD/original:/in -v $PWD/out:/out nerdfonts/patcher -c -s
+
+                  docker run --rm -v $PWD/ligaturized:/in -v $PWD/out:/out nerdfonts/patcher --makegroups 1 -c
+                  docker run --rm -v $PWD/ligaturized:/in -v $PWD/out:/out nerdfonts/patcher --makegroups 1 -c -s
+
+            # ===== 注入版本 =====
+            - name: Inject version
+              if: steps.final.outputs.build == 'true'
+              run: |
+                  python .scripts/inject_version.py \
+                    out \
+                    "${{ steps.bump.outputs.version }}" \
+                    "${{ steps.bump.outputs.tag }}"
+
+            # ===== 打包 =====
+            - name: Package
+              if: steps.final.outputs.build == 'true'
+              run: |
+                  cd out
+                  zip -r ../fonts-${{ steps.bump.outputs.tag }}.zip .
+
+            # ===== 发布 =====
+            - name: Release
+              if: steps.final.outputs.build == 'true'
+              uses: softprops/action-gh-release@v2
+              with:
+                  tag_name: ${{ steps.bump.outputs.tag }}
+                  name: Monaco Nerd Font ${{ steps.bump.outputs.tag }}
+                  body: |
+                      Source:
+                      - nerd-fonts: ${{ steps.nerd.outputs.tag }}
+                      - mode: ${{ steps.mode.outputs.mode }}
+                      - bump: ${{ steps.bump_type.outputs.bump }}
+                  files: fonts-${{ steps.bump.outputs.tag }}.zip
+              env:
+                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
