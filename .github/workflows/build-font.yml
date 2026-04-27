@@ -159,7 +159,8 @@ jobs:
                   python .scripts/inject_version.py \
                     out \
                     "${{ steps.bump.outputs.version }}" \
-                    "${{ steps.bump.outputs.tag }}"
+                    "${{ steps.bump.outputs.tag }}" \
+                    "${{ steps.nerd.outputs.tag }}"
 
             # ===== 打包 =====
             - name: Package
