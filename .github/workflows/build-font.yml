@@ -1,11 +1,8 @@
 name: Build Fonts
 
 on:
-    # 自动模式（检测 nerd-fonts 更新）
     schedule:
         - cron: "0 3 * * *"
-
-    # 手动模式（强制发布）
     workflow_dispatch:
         inputs:
             bump:
@@ -27,7 +24,11 @@ jobs:
               with:
                   fetch-depth: 0
 
-            # ===== 环境 =====
+            - name: Configure git
+              run: |
+                  git config user.name "github-actions"
+                  git config user.email "github-actions@github.com"
+
             - uses: actions/setup-python@v5
               with:
                   python-version: "3.11"
@@ -44,7 +45,7 @@ jobs:
                     echo "mode=auto" >> $GITHUB_OUTPUT
                   fi
 
-            # ===== 获取 nerd-fonts 最新版本 =====
+            # ===== 获取上游最新版本 =====
             - name: Get Nerd Fonts tag
               id: nerd
               run: |
@@ -53,39 +54,62 @@ jobs:
                     | grep -E '^v?[0-9]+\.[0-9]+\.[0-9]+$' \
                     | sort -V \
                     | tail -n1)
-
                   echo "tag=$TAG" >> $GITHUB_OUTPUT
 
-            # ===== 获取 release notes =====
+            # ===== 获取上游 release notes（用于自动 bump 推导）=====
             - name: Fetch release notes
               id: notes
               if: steps.mode.outputs.mode == 'auto'
               run: |
                   TAG=${{ steps.nerd.outputs.tag }}
                   BODY=$(curl -s https://api.github.com/repos/ryanoasis/nerd-fonts/releases/tags/$TAG | jq -r '.body')
-
                   echo "body<<EOF" >> $GITHUB_OUTPUT
                   echo "$BODY" >> $GITHUB_OUTPUT
                   echo "EOF" >> $GITHUB_OUTPUT
 
-            # ===== 是否需要构建（仅自动模式）=====
+            # ===== 🔧 核心修复：检测是否需要构建 =====
             - name: Check upstream update
               id: check
               if: steps.mode.outputs.mode == 'auto'
+              env:
+                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
               run: |
-                  LAST_TAG=$(git tag --list 'v*' | sort -V | tail -n1 || true)
+                  CURRENT_UPSTREAM="${{ steps.nerd.outputs.tag }}"
+                  LAST_USED=""
 
-                  if [ -z "$LAST_TAG" ]; then
-                    echo "build=true" >> $GITHUB_OUTPUT
-                    exit 0
+                  # ① 从最新标签注释中提取
+                  LAST_TAG=$(git tag --list 'v*' | sort -V | tail -n1 || true)
+                  if [ -n "$LAST_TAG" ]; then
+                    INFO=$(git for-each-ref refs/tags/$LAST_TAG --format='%(contents)')
+                    LAST_USED=$(echo "$INFO" | grep -o 'nerd-fonts: v[0-9.]*' | awk '{print $2}')
                   fi
 
-                  INFO=$(git for-each-ref refs/tags/$LAST_TAG --format='%(contents)')
-                  LAST_USED=$(echo "$INFO" | grep -o 'nerd-fonts: v[0-9.]*' | awk '{print $2}')
+                  # ② 若注释中无，回退到本仓库最新 Release 描述
+                  if [ -z "$LAST_USED" ]; then
+                    RELEASE_JSON=$(curl -s -H "Authorization: token $GITHUB_TOKEN" \
+                      "https://api.github.com/repos/${{ github.repository }}/releases/latest")
+                    # 只有成功获取到才提取，避免解析错误
+                    if echo "$RELEASE_JSON" | jq -e '.body' >/dev/null 2>&1; then
+                      RELEASE_BODY=$(echo "$RELEASE_JSON" | jq -r '.body')
+                      LAST_USED=$(echo "$RELEASE_BODY" | grep -o 'nerd-fonts: v[0-9.]*' | awk '{print $2}')
+                    fi
+                  fi
 
-                  if [ "$LAST_USED" != "${{ steps.nerd.outputs.tag }}" ]; then
+                  # ③ 判断
+                  if [ -z "$LAST_USED" ]; then
+                    # 完全没有历史记录
+                    if [ -z "$(git tag --list 'v*')" ]; then
+                      echo "No previous tags found, proceeding as first build."
+                      echo "build=true" >> $GITHUB_OUTPUT
+                    else
+                      echo "Could not determine last used upstream version. Skipping to avoid duplicate."
+                      echo "build=false" >> $GITHUB_OUTPUT
+                    fi
+                  elif [ "$LAST_USED" != "$CURRENT_UPSTREAM" ]; then
+                    echo "Upstream changed from $LAST_USED to $CURRENT_UPSTREAM."
                     echo "build=true" >> $GITHUB_OUTPUT
                   else
+                    echo "Upstream unchanged ($CURRENT_UPSTREAM)."
                     echo "build=false" >> $GITHUB_OUTPUT
                   fi
 
@@ -110,14 +134,12 @@ jobs:
               run: |
                   TAG=$(git tag --list 'v*' | sort -V | tail -n1 || true)
                   VERSION=$(echo $TAG | sed 's/^v//')
-
                   if [ -z "$VERSION" ]; then
                     VERSION="0.0.0"
                   fi
-
                   echo "version=$VERSION" >> $GITHUB_OUTPUT
 
-            # ===== 确定 bump =====
+            # ===== 确定 bump 类型 =====
             - name: Determine bump
               id: bump_type
               if: steps.final.outputs.build == 'true'
@@ -136,11 +158,9 @@ jobs:
               if: steps.final.outputs.build == 'true'
               run: |
                   chmod +x .scripts/bump_version.sh
-
                   NEW_VERSION=$(.scripts/bump_version.sh \
                     ${{ steps.current.outputs.version }} \
                     ${{ steps.bump_type.outputs.bump }})
-
                   echo "version=$NEW_VERSION" >> $GITHUB_OUTPUT
                   echo "tag=v$NEW_VERSION" >> $GITHUB_OUTPUT
 
@@ -149,14 +169,12 @@ jobs:
               if: steps.final.outputs.build == 'true'
               run: |
                   mkdir out
-
                   docker run --rm --user $(id -u):$(id -g) -v $PWD/original:/in -v $PWD/out:/out nerdfonts/patcher -c
                   docker run --rm --user $(id -u):$(id -g) -v $PWD/original:/in -v $PWD/out:/out nerdfonts/patcher -c -s
-
                   docker run --rm --user $(id -u):$(id -g) -v $PWD/ligaturized:/in -v $PWD/out:/out nerdfonts/patcher --makegroups 1 -c
                   docker run --rm --user $(id -u):$(id -g) -v $PWD/ligaturized:/in -v $PWD/out:/out nerdfonts/patcher --makegroups 1 -c -s
 
-            # ===== 注入版本 =====
+            # ===== 注入版本信息 =====
             - name: Inject version
               if: steps.final.outputs.build == 'true'
               run: |
@@ -173,8 +191,15 @@ jobs:
               run: |
                   cd out
                   for prefix in MonacoLigaturizedNerdFont MonacoLigaturizedNerdFontMono MonacoNerdFont MonacoNerdFontMono; do
-                      zip -r "../${prefix}.zip" "${prefix}-"*.ttf
+                    zip -r "../${prefix}.zip" "${prefix}-"*.ttf
                   done
+
+            # ===== 创建带注释的标签（从此可直接从注释读取）=====
+            - name: Create annotated tag
+              if: steps.final.outputs.build == 'true'
+              run: |
+                  git tag -a "${{ steps.bump.outputs.tag }}" -m "nerd-fonts: ${{ steps.nerd.outputs.tag }}"
+                  git push origin "${{ steps.bump.outputs.tag }}"
 
             # ===== 发布 =====
             - name: Release
